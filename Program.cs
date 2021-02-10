@@ -11,7 +11,7 @@ namespace Rx.Samples
 {
     static class Program
     {
-        static async Task Main()
+        static void Main()
         {
 
             var random = new Random();
