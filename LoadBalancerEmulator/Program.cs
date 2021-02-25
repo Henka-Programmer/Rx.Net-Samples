@@ -1,13 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reactive.Concurrency;
-using System.Reactive.Linq;
-using System.Reactive.Threading.Tasks;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace Rx.Samples
+namespace LoadBalancerEmulator
 {
     static class Program
     {
@@ -28,15 +22,13 @@ namespace Rx.Samples
                 }.Select(name => new ServiceMock(name, random, maxResponseTime))
                 .Cast<IService>().ToArray();
 
-            var emulator = new LoadBalancerEmulator(services, maxResponseTime);
+            var emulator = 
+                //new RxBasedLoadBalancer(services, maxResponseTime);
+                new TaskBasedLoadBalancer(services, maxResponseTime);
 
-            emulator.EmulateUsingTasks();
+            emulator.Start();
 
             Console.ReadLine();
         }
-
-
     }
-
-
 }

@@ -1,8 +1,7 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks;
 
-namespace Rx.Samples
+namespace LoadBalancerEmulator
 {
     public interface IService
     {
