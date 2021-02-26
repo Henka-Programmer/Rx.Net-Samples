@@ -12,9 +12,11 @@ namespace LoadBalancerEmulator
         public RxBasedLoadBalancer(IService[] services, TimeSpan maxResponseTime) : base(services, maxResponseTime)
         {
         }
-
-        public override void Start()
+        public override Task StartAsync()
         {
+            Console.WriteLine("# Rx Based Load Balancer");
+            Console.WriteLine();
+
             // Convert IService pings to observables
             IEnumerable<IObservable<string>> serverObservables =
                 Services.Select(async service =>
@@ -27,29 +29,31 @@ namespace LoadBalancerEmulator
             IObservable<string> clusterObservable = serverObservables.Merge();
 
             IObservable<IList<string>> observationPolicy = clusterObservable
-                .Buffer(PingTimeout) //buffering the items that arrived within a timeout
-                .Take(1); // look at the services that responded before a timeout
+                    .Buffer(PingTimeout) //buffering the items that arrived within a timeout 
+                    .Take(1)
+                    .Do(respondedServices =>
+                    {
+                        var list = string.Join(", ", respondedServices);
+                        Console.WriteLine($"\t\tResponded in time: {list}");
+                    }); // look at the services that responded before a timeout
+
 
             // and repeat the observation with a delay of 2 seconds
-            IObservable<IList<string>> delay = Observable.Empty<IList<string>>().Delay(TimeSpan.FromSeconds(1));
+            IObservable<IList<string>> delay = Observable.Empty<IList<string>>().Delay(MaxResponseTime);
 
             observationPolicy = observationPolicy
                 .Concat(delay) // concat the delay observable
-                .Concat(Observable.FromAsync(() =>
-                {
-                    return Task.Factory.StartNew(() =>
-                    {
-                        Console.WriteLine();
-                        return new List<string>();
-                    });
-                })) // concat the divider task between repeat iterations to print the dividre in the console.
+                .Do(onNext => { }, () =>
+                 {
+                     Console.WriteLine();
+                     Console.WriteLine();
+                 })
                 .Repeat();
 
-            observationPolicy.Subscribe(respondedServices =>
-            {
-                var list = string.Join(", ", respondedServices);
-                Console.WriteLine($"\t\tResponded in time: {list}");
-            });
+            // as the observables are lazy, so won't start until we subscribed
+            // we can do an empty subscription in order to invoke the observables to run.
+            // or just return the observable as a task 
+            return observationPolicy.ToTask();
         }
     }
 }

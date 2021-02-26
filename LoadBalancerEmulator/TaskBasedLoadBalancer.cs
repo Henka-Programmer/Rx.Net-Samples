@@ -13,7 +13,23 @@ namespace LoadBalancerEmulator
         {
         }
 
-        public override void Start()
+        public override async Task StartAsync()
+        {
+            Console.WriteLine("# Task Based Load Balancer");
+            Console.WriteLine();
+
+            // Infinity repeat with delay
+            while (true)
+            {
+                await CheckServices();
+                await Task.Delay(MaxResponseTime);
+                Console.WriteLine();
+                Console.WriteLine();
+            }
+        }
+
+        
+        private async Task CheckServices()
         {
             // Convert IService pings to tasks
             IEnumerable<Task<string>> listenerTasks =
@@ -24,8 +40,6 @@ namespace LoadBalancerEmulator
                 });
 
             var serviceReplyCountWithinTimeout = 0;
-            var countCancellationTokenSource = new CancellationTokenSource();
-            var countCancellationToken = countCancellationTokenSource.Token;
 
             var maxTimeoutCancellationTokenSource = new CancellationTokenSource();
             var maxTimeoutCancellationToken = maxTimeoutCancellationTokenSource.Token;
@@ -34,39 +48,40 @@ namespace LoadBalancerEmulator
 
             var countThresholdConditionTasks = listenerTasks.Select(async task =>
             {
-                if (maxTimeoutCancellationToken.IsCancellationRequested || countCancellationTokenSource.IsCancellationRequested)
+                if (maxTimeoutCancellationToken.IsCancellationRequested)
                 {
                     return;
                 }
 
                 var serviceName = await task;
+
                 respondedServices.Add(serviceName);
                 Interlocked.Increment(ref serviceReplyCountWithinTimeout);
-                if (serviceReplyCountWithinTimeout >= 3)
-                {
-                    // We reach the desired number of services replies within the timeout.
-                    countCancellationTokenSource.Cancel();
-                }
+
+                //// this will allow us to report only the first three services
+                //if (serviceReplyCountWithinTimeout == 3)
+                //{
+                //    // We reach the desired number of services replies within the timeout. 
+                //    var list = string.Join(", ", respondedServices);
+                //    Console.WriteLine($"\t\tResponded in time: {list}");
+                //}
             });
 
             // max timeout task, will request cancellation when completed.
-            var timeoutConditionTask = Task.Delay(MaxResponseTime / 2).ContinueWith(t => { maxTimeoutCancellationTokenSource.Cancel(); });
+            var timeoutConditionTask = Task
+                .Delay(PingTimeout, maxTimeoutCancellationToken)
+                .ContinueWith(_ =>
+                {
+                    maxTimeoutCancellationTokenSource.Cancel();
 
-            // Counter condition task, observing the counter in a task in order to use it in the Task.WhenAny()
-            var counterConditionTask = Task.Factory.StartNew(
-                () =>
-                //async () =>
-            {
-                while (!countCancellationToken.IsCancellationRequested) ;// await Task.Delay(10);
-                return Task.CompletedTask;
-            });
+                    // the services replies within the timeout. 
+                    var list = string.Join(", ", respondedServices);
+                    Console.WriteLine($"\t\tResponded in time: {list}");
+
+                }, maxTimeoutCancellationToken);
 
             // exit when all pings completed or the max timeout reached or the the responses count reached.
-            Task.WhenAny(Task.WhenAll(countThresholdConditionTasks), timeoutConditionTask, counterConditionTask).ContinueWith(t =>
-            {
-                var list = string.Join(", ", respondedServices);
-                Console.WriteLine($"\t\tResponded in time: {list}");
-            }).Wait();
+            await Task.WhenAny(Task.WhenAll(countThresholdConditionTasks), timeoutConditionTask);
         }
     }
 }

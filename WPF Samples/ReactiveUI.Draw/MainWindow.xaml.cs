@@ -1,32 +1,26 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reactive;
+using System.ComponentModel;
 using System.Reactive.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Shapes;
 
 namespace ReactiveUI.Drawboard
 {
     /// <summary>
-    /// Interaction logic for MainWindow.xaml
+    ///     Interaction logic for MainWindow.xaml
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly IDisposable _disposableTracking;
+
         public MainWindow()
         {
             InitializeComponent();
             Closing += MainWindow_Closing;
-            TrackMouseDrag(canv, Draw, DrawCompleted);
+            _disposableTracking = TrackMouseDrag(canv, Draw, DrawCompleted);
         }
 
         private void DrawCompleted()
@@ -34,22 +28,25 @@ namespace ReactiveUI.Drawboard
             // On draw completed
         }
 
-        private void Draw((Polyline currentLine, Point nextPoint) drawInfo)
+        private static void Draw((Polyline currentLine, Point nextPoint) drawInfo)
         {
             drawInfo.currentLine.Points.Add(drawInfo.nextPoint);
         }
 
-        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        private void MainWindow_Closing(object sender, CancelEventArgs e)
         {
             try
             {
-                disposableTracking?.Dispose();
+                _disposableTracking?.Dispose();
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
         }
 
 
-        private Polyline GetNewPolylineInstance()
+        private static Polyline GetNewPolylineInstance()
         {
             return new Polyline
             {
@@ -58,21 +55,24 @@ namespace ReactiveUI.Drawboard
             };
         }
 
-        public IDisposable TrackMouseDrag(Canvas canvas,
-    Action<(Polyline, Point)> dragging, Action dragComplete)
+        public IDisposable TrackMouseDrag(Canvas canvas, Action<(Polyline, Point)> dragging, Action dragComplete)
         {
-            var mouseDown = from evt in Observable.FromEventPattern<MouseButtonEventArgs>(canvas, "MouseDown")
-                            select evt.EventArgs.GetPosition(canvas);
+            var mouseDownStream =
+                from evt in Observable.FromEventPattern<MouseButtonEventArgs>(canvas, nameof(MouseDown))
+                select evt.EventArgs.GetPosition(canvas);
 
-            var mouseMove = from evt in Observable.FromEventPattern<MouseEventArgs>(canvas, "MouseMove")
-                            select evt.EventArgs.GetPosition(canvas);
-            var mouseUp = Observable.FromEventPattern<MouseButtonEventArgs>(canvas, "MouseUp");
+            var mouseMoveStream = from evt in Observable.FromEventPattern<MouseEventArgs>(canvas, nameof(MouseMove))
+                select evt.EventArgs.GetPosition(canvas);
 
-            return (from start in mouseDown.Select(s => StartNewLine(s))
-                    from currentPosition in mouseMove.TakeUntil(mouseUp)
-                            .Do(_ => { }, () => dragComplete())
-                    select (start, new Point(currentPosition.X, currentPosition.Y)))
-            .Subscribe(dragging);
+            var mouseUpStream = Observable.FromEventPattern<MouseButtonEventArgs>(canvas, nameof(MouseUp));
+
+            return mouseDownStream
+                .Select(StartNewLine)
+                .SelectMany(start => mouseMoveStream
+                        .TakeUntil(mouseUpStream)
+                        .Do(_ => { }, dragComplete),
+                    (start, currentPosition) => (start, new Point(currentPosition.X, currentPosition.Y)))
+                .Subscribe(dragging);
         }
 
         private Polyline StartNewLine(Point start)
@@ -83,9 +83,8 @@ namespace ReactiveUI.Drawboard
             return currentLine;
         }
 
-        private IDisposable disposableTracking;
-
         #region Buttons click event
+
         private void Button_Click(object sender, RoutedEventArgs e)
         {
             canv.Children.Clear();
@@ -95,7 +94,7 @@ namespace ReactiveUI.Drawboard
         {
             log.Clear();
         }
-        #endregion
 
+        #endregion
     }
 }

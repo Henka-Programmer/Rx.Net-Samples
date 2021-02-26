@@ -5,7 +5,7 @@ namespace LoadBalancerEmulator
 {
     static class Program
     {
-        static void Main()
+        private static void Main()
         {
 
             var random = new Random();
@@ -26,7 +26,7 @@ namespace LoadBalancerEmulator
                 //new RxBasedLoadBalancer(services, maxResponseTime);
                 new TaskBasedLoadBalancer(services, maxResponseTime);
 
-            emulator.Start();
+             emulator.StartAsync().Wait();
 
             Console.ReadLine();
         }
