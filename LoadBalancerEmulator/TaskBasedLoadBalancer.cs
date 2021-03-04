@@ -27,7 +27,6 @@ namespace LoadBalancerEmulator
                 Console.WriteLine();
             }
         }
-
         
         private async Task CheckServices()
         {
@@ -57,14 +56,6 @@ namespace LoadBalancerEmulator
 
                 respondedServices.Add(serviceName);
                 Interlocked.Increment(ref serviceReplyCountWithinTimeout);
-
-                //// this will allow us to report only the first three services
-                //if (serviceReplyCountWithinTimeout == 3)
-                //{
-                //    // We reach the desired number of services replies within the timeout. 
-                //    var list = string.Join(", ", respondedServices);
-                //    Console.WriteLine($"\t\tResponded in time: {list}");
-                //}
             });
 
             // max timeout task, will request cancellation when completed.
@@ -80,7 +71,7 @@ namespace LoadBalancerEmulator
 
                 }, maxTimeoutCancellationToken);
 
-            // exit when all pings completed or the max timeout reached or the the responses count reached.
+            // exit when all pings completed or the max timeout reached.
             await Task.WhenAny(Task.WhenAll(countThresholdConditionTasks), timeoutConditionTask);
         }
     }

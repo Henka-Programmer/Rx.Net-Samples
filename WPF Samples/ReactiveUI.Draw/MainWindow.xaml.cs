@@ -1,6 +1,8 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -46,12 +48,12 @@ namespace ReactiveUI.Drawboard
         }
 
 
-        private static Polyline GetNewPolylineInstance()
+        private static Polyline CreateNewPolylineInstance()
         {
             return new Polyline
             {
                 Stroke = Brushes.Black,
-                StrokeThickness = 4
+                StrokeThickness = 8
             };
         }
 
@@ -62,22 +64,23 @@ namespace ReactiveUI.Drawboard
                 select evt.EventArgs.GetPosition(canvas);
 
             var mouseMoveStream = from evt in Observable.FromEventPattern<MouseEventArgs>(canvas, nameof(MouseMove))
-                select evt.EventArgs.GetPosition(canvas);
+                    .TakeWhile(x => x.EventArgs.LeftButton == MouseButtonState.Pressed)
+                                  select evt.EventArgs.GetPosition(canvas);
 
             var mouseUpStream = Observable.FromEventPattern<MouseButtonEventArgs>(canvas, nameof(MouseUp));
-
+            
             return mouseDownStream
                 .Select(StartNewLine)
-                .SelectMany(start => mouseMoveStream
+                .SelectMany(line => mouseMoveStream
                         .TakeUntil(mouseUpStream)
                         .Do(_ => { }, dragComplete),
-                    (start, currentPosition) => (start, new Point(currentPosition.X, currentPosition.Y)))
+                    (line, currentPosition) => (line, new Point(currentPosition.X, currentPosition.Y)))
                 .Subscribe(dragging);
         }
 
         private Polyline StartNewLine(Point start)
         {
-            var currentLine = GetNewPolylineInstance();
+            var currentLine = CreateNewPolylineInstance();
             canv.Children.Add(currentLine);
             currentLine.Points.Add(start);
             return currentLine;
